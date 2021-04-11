@@ -4,6 +4,7 @@ from collections import namedtuple
 
 import numpy as np
 from scipy.optimize import minimize
+from scipy.optimize import LinearConstraint
 
 PlanElement = namedtuple("PlanElement", ["u", "p"])
 
@@ -34,13 +35,8 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
     def __minimize_ps__(ps):
         iterated_fisher = np.zeros((s, s))
         for j in range(q):
-            mini_u = updated_us_epsilon_plan[j].u
             p_j = ps[j]
-            fisher = compute_fisher_information(
-                N, s, F, psi, H, R, x0, mini_u,
-                F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
-            )
-            iterated_fisher += p_j * fisher
+            iterated_fisher += p_j * updated_fisher_matrices[j]
         return __x_a_criteria__(iterated_fisher)
 
     def __mju_a_criteria__(u_tk_plus_1, plan):
@@ -81,13 +77,13 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
 
     # Информационные матрицы от начального плана
     fisher_matrices = []
-
     for i in range(q):
         u = epsilon_zero_plan[i].u
-        fisher = compute_fisher_information(
+        fisher_zero = compute_fisher_information(
             N, s, F, psi, H, R, x0, u, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
         )
-        fisher_matrices.append(fisher)
+        print(f"Матрица одноточечного плана от U0[{i}]:\n{fisher_zero}")
+        fisher_matrices.append(fisher_zero)
 
     # Нормализованная матрица всего плана
     normalized_fisher = np.zeros((s, s))
@@ -95,32 +91,46 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
         weight = epsilon_zero_plan[i].p
         fisher_matrix = fisher_matrices[i]
         normalized_fisher += weight * fisher_matrix
-    print(f"Матрица всего плана:\n{normalized_fisher}\n")
+    print(f"Матрица всего плана (с учётом весов):\n{normalized_fisher}\n")
 
     current_plan = epsilon_zero_plan
     k = 0
     while True:
         print(f"План на {k} итерации:\n{current_plan}")
         # Шаг 2
+        # Выберем значения U из текущего плана для последующей оптимизации
         current_us = np.array([plan_el.u for plan_el in current_plan])
+        # Минимизируем U с помощью minimize из scipy.optimize
         us_result = minimize(
-            __minimize_us__,
-            current_us,
+            __minimize_us__, current_us,
             method='SLSQP',
             bounds=np.array([u_bounds for i in range(q)])
         )
 
+        # Создаём новый план из новых U и старых весов P
         updated_us_epsilon_plan = [PlanElement(us_result.x[i], current_plan[i].p) for i in range(q)]
         print(f"План после минимизации U:\n{updated_us_epsilon_plan}")
 
+        # Создаём новые информационные матрицы от плана с обновлёнными U
+        updated_fisher_matrices = []
+        for i in range(q):
+            mini_u = updated_us_epsilon_plan[i].u
+            fisher_upd = compute_fisher_information(
+                    N, s, F, psi, H, R, x0, mini_u, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
+            )
+            updated_fisher_matrices.append(fisher_upd)
+            print(f"Матрица одноточечного плана от U{k + 1}[{i}]:\n{fisher_upd}")
+
         # Шаг 3
+        # Выберем значения P из текущего плана для последующей оптимизации
         current_ps = np.array([plan_el.p for plan_el in updated_us_epsilon_plan])
+        # Минимизируем веса
         ps_result = minimize(
-            __minimize_ps__,
-            current_ps,
+            __minimize_ps__, current_ps,
             method='SLSQP',
-            bounds=np.array([[0., 1.] for i in range(q)])
+            bounds=np.array([[0., 1.] for i in range(q)]),
         )
+        # Создаём полностью новый план из новых U и P
         next_epsilon_plan = [PlanElement(us_result.x[i], ps_result.x[i]) for i in range(q)]
         print(f"План после минимизации весов p:\n{next_epsilon_plan}")
 
@@ -139,6 +149,6 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
             #     break
 
         # Иначе идём на шаги 2-3
-        print("")
+        print("Продолжаем...\n")
         k += 1
         current_plan = next_epsilon_plan
