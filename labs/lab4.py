@@ -1,4 +1,5 @@
 from labs.fisher_information import compute_fisher_information
+from labs.Л3 import pIMF
 
 from collections import namedtuple
 
@@ -19,6 +20,20 @@ def __x_d_criteria__(fisher_by_plan):
     return - np.log(np.linalg.det(fisher_by_plan))
 
 
+# 1 Добавил функцию вычислелния градиента критерия А по u
+def __grad_x_a_criteria_u__(fisher_by_plan):
+    dM = pIMF()
+    # ???
+    return -0.25 * np.trace(np.linalg.inv(fisher_by_plan) @ np.linalg.inv(fisher_by_plan) @ dM)
+
+
+# 2 Добавил функцию вычислелния градиента критерия D по u
+def __grad_x_d_criteria_u__(fisher_by_plan):
+    dM = pIMF()
+    # ???
+    return -0.25 * np.log(np.linalg.det(fisher_by_plan) @ dM)
+
+
 def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs):
     def __minimize_us__(us):
         iterated_fisher = np.zeros((s, s))
@@ -35,11 +50,10 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
     def __minimize_ps__(ps):
         iterated_fisher = np.zeros((s, s))
         for j in range(q):
-            p_j = ps[j]
-            iterated_fisher += p_j * updated_fisher_matrices[j]
+            iterated_fisher += ps[j] * updated_fisher_matrices[j]
         return __x_a_criteria__(iterated_fisher)
 
-    def __mju_a_criteria__(u_tk_plus_1, plan):
+    def __mju_a_criteria__(u_of_point, plan):
         fisher_plan = np.zeros((s, s))
         for j in range(q):
             fisher = compute_fisher_information(
@@ -47,12 +61,13 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
                 F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
             )
             fisher_plan += plan[j].p * fisher
-        print(u_tk_plus_1)
-        fisher_by_u_tk_plus_1 = compute_fisher_information(
-            N, s, F, psi, H, R, x0, u_tk_plus_1[j],
+        fisher_plan_inverted = np.linalg.inv(fisher_plan)
+
+        fisher_by_u_of_point = compute_fisher_information(
+            N, s, F, psi, H, R, x0, u_of_point,
             F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
         )
-        return np.trace(fisher_plan @ fisher_by_u_tk_plus_1)
+        return np.trace(fisher_plan_inverted @ fisher_plan_inverted @ fisher_by_u_of_point)
 
     def __eta_a_criteria__(plan_star):
         fisher_plan = np.zeros((s, s))
@@ -82,7 +97,7 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
         fisher_zero = compute_fisher_information(
             N, s, F, psi, H, R, x0, u, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
         )
-        print(f"Матрица одноточечного плана от U0[{i}]:\n{fisher_zero}")
+        # print(f"Матрица одноточечного плана от U0[{i}]:\n{fisher_zero}")
         fisher_matrices.append(fisher_zero)
 
     # Нормализованная матрица всего плана
@@ -91,7 +106,7 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
         weight = epsilon_zero_plan[i].p
         fisher_matrix = fisher_matrices[i]
         normalized_fisher += weight * fisher_matrix
-    print(f"Матрица всего плана (с учётом весов):\n{normalized_fisher}\n")
+    # print(f"Матрица всего плана (с учётом весов):\n{normalized_fisher}\n")
 
     current_plan = epsilon_zero_plan
     k = 0
@@ -109,7 +124,7 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
 
         # Создаём новый план из новых U и старых весов P
         updated_us_epsilon_plan = [PlanElement(us_result.x[i], current_plan[i].p) for i in range(q)]
-        print(f"План после минимизации U:\n{updated_us_epsilon_plan}")
+        # print(f"План после минимизации U:\n{updated_us_epsilon_plan}")
 
         # Создаём новые информационные матрицы от плана с обновлёнными U
         updated_fisher_matrices = []
@@ -119,20 +134,36 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
                     N, s, F, psi, H, R, x0, mini_u, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
             )
             updated_fisher_matrices.append(fisher_upd)
-            print(f"Матрица одноточечного плана от U{k + 1}[{i}]:\n{fisher_upd}")
+            # print(f"Матрица одноточечного плана от U{k + 1}[{i}]:\n{fisher_upd}")
 
         # Шаг 3
         # Выберем значения P из текущего плана для последующей оптимизации
         current_ps = np.array([plan_el.p for plan_el in updated_us_epsilon_plan])
+
+        # Условие, задающее, что сумма всех весов должна быть равна 1
+        p_variable_matrix = []
+        for i in range(q):
+            if i == 0:
+                p_variable_matrix.append([1 for i in range(q)])
+            else:
+                p_variable_matrix.append([0 for i in range(q)])
+
+        # sum_of_all_weights_1_cond = LinearConstraint(
+        #     [[1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
+        #     [0, 0, 0, 0], [1, 1, 1, 1]
+        # )
+        sum_of_all_weights_1_cond = LinearConstraint(p_variable_matrix, [0 for i in range(q)], [1 for i in range(q)])
+
         # Минимизируем веса
         ps_result = minimize(
             __minimize_ps__, current_ps,
             method='SLSQP',
             bounds=np.array([[0., 1.] for i in range(q)]),
+            constraints=sum_of_all_weights_1_cond,
         )
         # Создаём полностью новый план из новых U и P
         next_epsilon_plan = [PlanElement(us_result.x[i], ps_result.x[i]) for i in range(q)]
-        print(f"План после минимизации весов p:\n{next_epsilon_plan}")
+        # print(f"План после минимизации весов p:\n{next_epsilon_plan}")
 
         # Шаг 4
         inequality_value = 0
@@ -144,11 +175,40 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
         inequality_value += np.linalg.norm(delta_us) ** 2
 
         if inequality_value <= delta:
-            break
-            # if abs(__mju_a_criteria__(us_result.x, next_epsilon_plan) - __eta_a_criteria__(next_epsilon_plan)) <= delta:
-            #     break
+            # break
+            step_5_condition_values = []
+            for i in range(q):
+                step_5_condition_values.append(
+                    abs(__mju_a_criteria__(us_result.x[i], next_epsilon_plan) - __eta_a_criteria__(next_epsilon_plan))
+                )
+            if all(val <= delta for val in step_5_condition_values):
+                print("Конец\n")
+                current_plan = next_epsilon_plan
+                break
 
         # Иначе идём на шаги 2-3
         print("Продолжаем...\n")
         k += 1
         current_plan = next_epsilon_plan
+
+    print(f"Итоговый план:\n{current_plan}")
+
+    cleaned_plan = cleanup_plan(current_plan)
+    print(f"Очищенный итоговый план:\n{cleaned_plan}")
+    return cleaned_plan
+
+
+def cleanup_plan(plan):
+    # изначально закинем первую точку плана в очищенный
+    # переконвертируем значения из кортежа в список, чтобы можно было сложить веса потом
+    cleaned_plan = [list(plan[0])]
+    for i in range(1, len(plan)):
+        next_point = plan[i]
+        for el in cleaned_plan:
+            # близка ли очередная точка плана к уже имеющейся в плане
+            # numpy-функция для проверки того, насколько близки float'ы
+            if np.isclose(el[0], next_point.u):
+                el[1] += next_point.p
+                break
+    # перегоним значения точек плана из списка обратно в кортеж
+    return list(map(lambda val: PlanElement(val[0], val[1]), cleaned_plan))
