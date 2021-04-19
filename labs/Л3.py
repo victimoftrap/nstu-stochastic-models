@@ -1,6 +1,6 @@
 import numpy as np
 
-def pIMF():
+def pIMF(N, U):
     # Нулевая матрица 2 на 2
     zMatrix = np.array([[0, 0], [0, 0]])
     
@@ -76,7 +76,7 @@ def pIMF():
                 psiA[cell * len(psi) + row, 0] = setting_value
     
     # Шаг 2
-    N = 3
+    # N = 3
     
     # Производная информационной матрицы Фишера до начала алгоритма
     dpM = []
@@ -88,7 +88,8 @@ def pIMF():
         Xa[k+1] = np.zeros((3*len(psi), 1))
         pr.append(list(tmpList))
         # Шаг 3
-        u = 1
+        # u = 1
+        u = U[k]
         # Шаг 4
         if k == 0: 
             # Формирование вектора Xa
@@ -135,13 +136,14 @@ def pIMF():
                             + (H @ C[row] @ (pr[k][b] @ Xa_t + Xa[k+1] @ pr_t) @ C_t[0] @ pH_t * (R ** -1)) + \
                                 + (H @ C[row] @ (pr[k][b] @ Xa_t + Xa[k+1] @ pr_t) @ C_t[col] @ H_t * (R ** -1))
             
-    for i in range(N):
-        print(dpM[i])
+    # for i in range(N):
+    #     print(dpM[i])
     # Возврат первой матрицы (для проверки)
-    return dpM[0]
+    return dpM
 
 
-
+if __name__ == '__main__':
+    pIMF()
 
 
 

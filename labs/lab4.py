@@ -13,38 +13,63 @@ delta = 0.001
 
 
 def __x_a_criteria__(fisher_by_plan):
-    return np.trace(np.linalg.inv(fisher_by_plan))
+    val = np.trace(np.linalg.inv(fisher_by_plan))
+    print(f"X[M(ksi)] A-optimal: {val}")
+    return val
 
 
 def __x_d_criteria__(fisher_by_plan):
-    return - np.log(np.linalg.det(fisher_by_plan))
-
-
-# 1 Добавил функцию вычислелния градиента критерия А по u
-def __grad_x_a_criteria_u__(fisher_by_plan):
-    dM = pIMF()
-    # ???
-    return -0.25 * np.trace(np.linalg.inv(fisher_by_plan) @ np.linalg.inv(fisher_by_plan) @ dM)
-
-
-# 2 Добавил функцию вычислелния градиента критерия D по u
-def __grad_x_d_criteria_u__(fisher_by_plan):
-    dM = pIMF()
-    # ???
-    return -0.25 * np.log(np.linalg.det(fisher_by_plan) @ dM)
+    val = - np.log(np.linalg.det(fisher_by_plan))
+    print(f"X[M(ksi)] D-optimal: {val}")
+    return val
 
 
 def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs):
+    def __grad_a_us_criteria__(us):
+        fisher_plan = np.zeros((s, s))
+        for j in range(q):
+            fisher = compute_fisher_information(
+                N, s, F, psi, H, R, x0, us[j],
+                F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
+            )
+            fisher_plan += current_plan[j].p * fisher
+        f_2_degree = np.linalg.inv(fisher_plan) @ np.linalg.inv(fisher_plan)
+
+        u_gradient = []
+        for j in range(q):
+            derivs = pIMF(N, np.array([us[j] for i in range(N)]))
+            u_optima = []
+            for der in derivs:
+                u_optima.append(- current_plan[j].p * np.trace(f_2_degree @ der))
+            u_gradient.append(np.array(u_optima))
+        return np.array(u_gradient)
+
+    def __grad_a_ps_criteria__(ps):
+        fisher_plan = np.zeros((s, s))
+        f_matrices = []
+        for j in range(q):
+            fisher = compute_fisher_information(
+                N, s, F, psi, H, R, x0, updated_us_epsilon_plan[j].u,
+                F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
+            )
+            f_matrices.append(fisher)
+            fisher_plan += ps[j] * fisher
+        f_2_degree = np.linalg.inv(fisher_plan) @ np.linalg.inv(fisher_plan)
+
+        p_gradient = []
+        for mat in f_matrices:
+            p_val = - np.trace(f_2_degree @ mat)
+            p_gradient.append(np.linalg.norm(p_val))
+        return np.array(p_gradient)
+
     def __minimize_us__(us):
         iterated_fisher = np.zeros((s, s))
         for j in range(q):
-            u_j = us[j]
-            p_weight = current_plan[j].p
             fisher = compute_fisher_information(
-                N, s, F, psi, H, R, x0, u_j,
+                N, s, F, psi, H, R, x0, us[j],
                 F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
             )
-            iterated_fisher += p_weight * fisher
+            iterated_fisher += current_plan[j].p * fisher
         return __x_a_criteria__(iterated_fisher)
 
     def __minimize_ps__(ps):
@@ -61,13 +86,13 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
                 F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
             )
             fisher_plan += plan[j].p * fisher
-        fisher_plan_inverted = np.linalg.inv(fisher_plan)
+        f_plan_inverted = np.linalg.inv(fisher_plan)
 
         fisher_by_u_of_point = compute_fisher_information(
             N, s, F, psi, H, R, x0, u_of_point,
             F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
         )
-        return np.trace(fisher_plan_inverted @ fisher_plan_inverted @ fisher_by_u_of_point)
+        return np.trace(f_plan_inverted @ f_plan_inverted @ fisher_by_u_of_point)
 
     def __eta_a_criteria__(plan_star):
         fisher_plan = np.zeros((s, s))
@@ -111,15 +136,20 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
     current_plan = epsilon_zero_plan
     k = 0
     while True:
-        print(f"План на {k} итерации:\n{current_plan}")
+        # print(f"План на {k} итерации:\n{current_plan}")
         # Шаг 2
         # Выберем значения U из текущего плана для последующей оптимизации
-        current_us = np.array([plan_el.u for plan_el in current_plan])
+        current_us = []
+        for elem in current_plan:
+            for i in range(N):
+                current_us.append(elem.u)
+        current_us = np.array(current_us)
         # Минимизируем U с помощью minimize из scipy.optimize
         us_result = minimize(
             __minimize_us__, current_us,
             method='SLSQP',
-            bounds=np.array([u_bounds for i in range(q)])
+            bounds=np.array([u_bounds for i in range(N * q)]),
+            jac=__grad_a_us_criteria__,
         )
 
         # Создаём новый план из новых U и старых весов P
@@ -141,17 +171,16 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
         current_ps = np.array([plan_el.p for plan_el in updated_us_epsilon_plan])
 
         # Условие, задающее, что сумма всех весов должна быть равна 1
+        # sum_of_all_weights_1_cond = LinearConstraint(
+        #     [[1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
+        #     [0, 0, 0, 0], [1, 1, 1, 1]
+        # )
         p_variable_matrix = []
         for i in range(q):
             if i == 0:
                 p_variable_matrix.append([1 for i in range(q)])
             else:
                 p_variable_matrix.append([0 for i in range(q)])
-
-        # sum_of_all_weights_1_cond = LinearConstraint(
-        #     [[1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
-        #     [0, 0, 0, 0], [1, 1, 1, 1]
-        # )
         sum_of_all_weights_1_cond = LinearConstraint(p_variable_matrix, [0 for i in range(q)], [1 for i in range(q)])
 
         # Минимизируем веса
@@ -160,6 +189,7 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
             method='SLSQP',
             bounds=np.array([[0., 1.] for i in range(q)]),
             constraints=sum_of_all_weights_1_cond,
+            jac=__grad_a_ps_criteria__,
         )
         # Создаём полностью новый план из новых U и P
         next_epsilon_plan = [PlanElement(us_result.x[i], ps_result.x[i]) for i in range(q)]
@@ -175,19 +205,17 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
         inequality_value += np.linalg.norm(delta_us) ** 2
 
         if inequality_value <= delta:
-            # break
             step_5_condition_values = []
             for i in range(q):
                 step_5_condition_values.append(
                     abs(__mju_a_criteria__(us_result.x[i], next_epsilon_plan) - __eta_a_criteria__(next_epsilon_plan))
                 )
             if all(val <= delta for val in step_5_condition_values):
-                print("Конец\n")
+                # Конец алгоритма
                 current_plan = next_epsilon_plan
                 break
 
         # Иначе идём на шаги 2-3
-        print("Продолжаем...\n")
         k += 1
         current_plan = next_epsilon_plan
 
