@@ -9,7 +9,7 @@ from scipy.optimize import LinearConstraint
 
 PlanElement = namedtuple("PlanElement", ["u", "p"])
 
-delta = 0.001
+delta = 0.01
 
 
 def __x_a_criteria__(fisher_by_plan):
@@ -29,7 +29,7 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
         fisher_plan = np.zeros((s, s))
         for j in range(q):
             fisher = compute_fisher_information(
-                N, s, F, psi, H, R, x0, us[j],
+                N, s, F, psi, H, R, x0, us[j * N:(j + 1) * N],
                 F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
             )
             fisher_plan += current_plan[j].p * fisher
@@ -66,7 +66,7 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
         iterated_fisher = np.zeros((s, s))
         for j in range(q):
             fisher = compute_fisher_information(
-                N, s, F, psi, H, R, x0, us[j],
+                N, s, F, psi, H, R, x0, us[j * N:(j + 1) * N],
                 F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
             )
             iterated_fisher += current_plan[j].p * fisher
@@ -110,7 +110,7 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
     # Начальный план
     epsilon_zero_plan = []
     for i in range(q):
-        eps_u = 1
+        eps_u = [1 for i in range(N)]
         eps_p = 1 / q
         epsilon_zero_plan.append(PlanElement(eps_u, eps_p))
     print(f"Начальный невырожденный план:\n{epsilon_zero_plan}\n")
@@ -136,14 +136,15 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
     current_plan = epsilon_zero_plan
     k = 0
     while True:
-        # print(f"План на {k} итерации:\n{current_plan}")
+        print(f"План на {k} итерации:\n{current_plan}")
         # Шаг 2
         # Выберем значения U из текущего плана для последующей оптимизации
         current_us = []
         for elem in current_plan:
-            for i in range(N):
-                current_us.append(elem.u)
+            for u_tk in elem.u:
+                current_us.append(u_tk)
         current_us = np.array(current_us)
+
         # Минимизируем U с помощью minimize из scipy.optimize
         us_result = minimize(
             __minimize_us__, current_us,
@@ -153,7 +154,7 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
         )
 
         # Создаём новый план из новых U и старых весов P
-        updated_us_epsilon_plan = [PlanElement(us_result.x[i], current_plan[i].p) for i in range(q)]
+        updated_us_epsilon_plan = [PlanElement(us_result.x[i * N:(i + 1) * N], current_plan[i].p) for i in range(q)]
         # print(f"План после минимизации U:\n{updated_us_epsilon_plan}")
 
         # Создаём новые информационные матрицы от плана с обновлёнными U
@@ -161,7 +162,7 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
         for i in range(q):
             mini_u = updated_us_epsilon_plan[i].u
             fisher_upd = compute_fisher_information(
-                    N, s, F, psi, H, R, x0, mini_u, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
+                N, s, F, psi, H, R, x0, mini_u, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
             )
             updated_fisher_matrices.append(fisher_upd)
             # print(f"Матрица одноточечного плана от U{k + 1}[{i}]:\n{fisher_upd}")
@@ -192,24 +193,24 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
             jac=__grad_a_ps_criteria__,
         )
         # Создаём полностью новый план из новых U и P
-        next_epsilon_plan = [PlanElement(us_result.x[i], ps_result.x[i]) for i in range(q)]
+        next_epsilon_plan = [PlanElement(us_result.x[i * N:(i + 1) * N], ps_result.x[i]) for i in range(q)]
         # print(f"План после минимизации весов p:\n{next_epsilon_plan}")
 
         # Шаг 4
         inequality_value = 0
-        # Считем разницу между векторами для нормы
-        delta_us = us_result.x - current_us
         # Считаем ту часть с весами
         for i in range(q):
-            inequality_value += (ps_result.x[i] - current_ps[i]) ** 2
-        inequality_value += np.linalg.norm(delta_us) ** 2
+            ps_difference = (ps_result.x[i] - current_ps[i]) ** 2
+            us_difference = np.linalg.norm(us_result.x[i * N:(i + 1) * N] - current_us[i * N:(i + 1) * N]) ** 2
+            inequality_value += ps_difference + us_difference
 
         if inequality_value <= delta:
             step_5_condition_values = []
             for i in range(q):
-                step_5_condition_values.append(
-                    abs(__mju_a_criteria__(us_result.x[i], next_epsilon_plan) - __eta_a_criteria__(next_epsilon_plan))
-                )
+                mju_value = __mju_a_criteria__(us_result.x[i * N:(i + 1) * N], next_epsilon_plan)
+                eta_value = __eta_a_criteria__(next_epsilon_plan)
+                step_5_condition_values.append(abs(mju_value - eta_value))
+
             if all(val <= delta for val in step_5_condition_values):
                 # Конец алгоритма
                 current_plan = next_epsilon_plan
@@ -218,25 +219,24 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
         # Иначе идём на шаги 2-3
         k += 1
         current_plan = next_epsilon_plan
+        print("")
 
-    print(f"Итоговый план:\n{current_plan}")
-
-    cleaned_plan = cleanup_plan(current_plan)
-    print(f"Очищенный итоговый план:\n{cleaned_plan}")
-    return cleaned_plan
+    print(f"\nИтоговый план:\n{current_plan}\n")
+    return current_plan
 
 
 def cleanup_plan(plan):
-    # изначально закинем первую точку плана в очищенный
-    # переконвертируем значения из кортежа в список, чтобы можно было сложить веса потом
     cleaned_plan = [list(plan[0])]
     for i in range(1, len(plan)):
         next_point = plan[i]
+        merged = False
         for el in cleaned_plan:
-            # близка ли очередная точка плана к уже имеющейся в плане
-            # numpy-функция для проверки того, насколько близки float'ы
-            if np.isclose(el[0], next_point.u):
+            u_in_plan = el[0]
+            if all(np.isclose(u_in_plan[j], next_point.u[j]) for j in range(len(u_in_plan))):
                 el[1] += next_point.p
+                merged = True
                 break
-    # перегоним значения точек плана из списка обратно в кортеж
-    return list(map(lambda val: PlanElement(val[0], val[1]), cleaned_plan))
+
+        if not merged:
+            cleaned_plan.append(next_point)
+    return list(map(lambda point: PlanElement(point[0], point[1]), cleaned_plan))

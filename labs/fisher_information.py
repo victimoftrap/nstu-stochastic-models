@@ -1,18 +1,18 @@
 import numpy as np
 
 
-def __compute_initial_extended_x__(cells, f_capital, psi_capital, x0, u_capital, f_derivs, psi_derivs, x0_derivs):
+def __compute_initial_extended_x__(cells, f_capital, psi_capital, x0, u_t0, f_derivs, psi_derivs, x0_derivs):
     xs_extended = np.zeros((cells * len(f_capital), 1))
 
-    xs_extended[0:len(f_capital)] = f_capital @ x0 + psi_capital * u_capital
+    xs_extended[0:len(f_capital)] = f_capital @ x0 + psi_capital * u_t0
     for alpha in range(len(f_derivs)):
         xs_extended[(alpha + 1) * len(f_derivs):(alpha + 2) * len(f_derivs)] = \
-            f_derivs[alpha] @ x0 + f_capital @ x0_derivs[alpha] + psi_derivs[alpha] * u_capital
+            f_derivs[alpha] @ x0 + f_capital @ x0_derivs[alpha] + psi_derivs[alpha] * u_t0
     return xs_extended
 
 
-def __compute_extended_x__(f_ext, x_ext, psi_ext, u_vector):
-    return f_ext @ x_ext + psi_ext * u_vector
+def __compute_extended_x__(f_ext, x_ext, psi_ext, u_tk):
+    return f_ext @ x_ext + psi_ext * u_tk
 
 
 def __compute_all_c__(cells, n):
@@ -86,12 +86,13 @@ def compute_fisher_information(n_capital, s_theta_number, f_capital, psi_capital
 
     x_extended_prev = []
     for k in range(n_capital):
+        u_tk = u_capital[k]
         if k == 0:
             x_extended = __compute_initial_extended_x__(
-                cells_number, f_capital, psi_capital, x0, u_capital, f_derivs, psi_derivs, x0_derivs
+                cells_number, f_capital, psi_capital, x0, u_tk, f_derivs, psi_derivs, x0_derivs
             )
         else:
-            x_extended = __compute_extended_x__(f_extended, x_extended_prev, psi_extended, u_capital)
+            x_extended = __compute_extended_x__(f_extended, x_extended_prev, psi_extended, u_tk)
         x_extended_prev = x_extended
 
         delta_fisher = np.zeros((s_theta_number, s_theta_number))
