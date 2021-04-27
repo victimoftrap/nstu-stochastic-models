@@ -1,4 +1,5 @@
 from labs.lab4 import optimal_plan
+from labs.lab5 import dual_procedure_optimal_plan
 
 import numpy as np
 
@@ -28,4 +29,5 @@ if __name__ == '__main__':
     x0_derivs = [np.array([[0], [0]]),
                  np.array([[0], [0]])]
 
-    optimal_plan(N, s, F, psi, H, R, x0, U_bounds, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs)
+    # optimal_plan(N, s, F, psi, H, R, x0, U_bounds, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs)
+    dual_procedure_optimal_plan('A', N, s, F, psi, H, R, x0, U_bounds, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs)
