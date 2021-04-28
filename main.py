@@ -29,5 +29,8 @@ if __name__ == '__main__':
     x0_derivs = [np.array([[0], [0]]),
                  np.array([[0], [0]])]
 
-    # optimal_plan(N, s, F, psi, H, R, x0, U_bounds, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs)
-    dual_procedure_optimal_plan('A', N, s, F, psi, H, R, x0, U_bounds, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs)
+    # plan = optimal_plan(N, s, F, psi, H, R, x0, U_bounds, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs)
+    dual_procedure_optimal_plan(
+        'D', None,
+        N, s, F, psi, H, R, x0, U_bounds, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
+    )

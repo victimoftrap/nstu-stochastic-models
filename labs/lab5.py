@@ -70,8 +70,20 @@ def __clean_up_plan__(plan):
     return list(map(lambda point: PlanElement(point[0], point[1]), without_zero_weights))
 
 
-def dual_procedure_optimal_plan(optimality_criterion,
-                                N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs):
+def __default_plan__(s, N):
+    q = int((s * (s + 1) / 2) + 1)
+    default_plan = []
+    for i in range(q):
+        eps_u = [1 for i in range(N)]
+        eps_p = 1 / q
+        default_plan.append(PlanElement(eps_u, eps_p))
+    return default_plan
+
+
+def dual_procedure_optimal_plan(
+        optimality_criterion, initial_plan,
+        N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
+):
     def __mju_a__(u_of_point):
         fisher_plan = __compute_fisher_by_plan__(
             current_plan, N, s, F, psi, H, R, x0, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
@@ -138,13 +150,9 @@ def dual_procedure_optimal_plan(optimality_criterion,
         compute_mju = __mju_d__
         compute_eta = __eta_d__
         compute_x = __x_d__
+    print(f"Двойственная процедура построения непрерывного {optimality_criterion}- оптимального плана\n")
 
-    q = int((s * (s + 1) / 2) + 1)
-    epsilon_zero_plan = []
-    for i in range(q):
-        eps_u = [1 for i in range(N)]
-        eps_p = 1 / q
-        epsilon_zero_plan.append(PlanElement(eps_u, eps_p))
+    epsilon_zero_plan = initial_plan if initial_plan is not None else __default_plan__(s, N)
     print(f"Начальный невырожденный план:\n{epsilon_zero_plan}\n")
 
     current_plan = epsilon_zero_plan
@@ -181,5 +189,5 @@ def dual_procedure_optimal_plan(optimality_criterion,
             k += 1
             current_plan = cleaned_plan
 
-    print(f"Итоговый план:\n{current_plan}")
+    print(f"\nИтоговый план:\n{current_plan}")
     return current_plan
