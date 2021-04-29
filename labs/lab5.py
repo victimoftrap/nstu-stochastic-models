@@ -1,4 +1,5 @@
 from labs.fisher_information import compute_fisher_information
+from labs.Л3 import pIMF
 
 from collections import namedtuple
 import random
@@ -81,7 +82,7 @@ def __default_plan__(s, N):
 
 
 def dual_procedure_optimal_plan(
-        optimality_criterion, initial_plan,
+        optimality_criterion, initial_plan, use_gradient,
         N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
 ):
     def __mju_a__(u_of_point):
@@ -97,6 +98,18 @@ def dual_procedure_optimal_plan(
 
     def __mju_a_for_maximization__(u_of_point):
         return - __mju_a__(u_of_point)
+
+    def __grad_a__(us):
+        fisher_plan = __compute_fisher_by_plan__(
+            current_plan, N, s, F, psi, H, R, x0, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
+        )
+        f_2_degree = np.linalg.inv(fisher_plan) @ np.linalg.inv(fisher_plan)
+
+        derivs = pIMF(N, np.array(us))
+        u_gradient = []
+        for der in derivs:
+            u_gradient.append(np.trace(f_2_degree @ der))
+        return np.array(u_gradient)
 
     def __eta_a__(plan_star):
         fisher_plan = np.zeros((s, s))
@@ -129,6 +142,18 @@ def dual_procedure_optimal_plan(
     def __mju_d_for_maximization(u_of_point):
         return - __mju_d__(u_of_point)
 
+    def __grad_d__(us):
+        fisher_plan = __compute_fisher_by_plan__(
+            current_plan, N, s, F, psi, H, R, x0, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
+        )
+        f_inverted = np.linalg.inv(fisher_plan)
+
+        derivs = pIMF(N, np.array(us))
+        u_gradient = []
+        for der in derivs:
+            u_gradient.append(np.trace(f_inverted @ der))
+        return np.array(u_gradient)
+
     def __eta_d__(plan_star):
         return s
 
@@ -142,15 +167,21 @@ def dual_procedure_optimal_plan(
 
     if optimality_criterion == 'A':
         maximization_mju = __mju_a_for_maximization__
+        gradient = __grad_a__ if use_gradient else None
         compute_mju = __mju_a__
         compute_eta = __eta_a__
         compute_x = __x_a__
     else:
         maximization_mju = __mju_d_for_maximization
+        gradient = __grad_d__ if use_gradient else None
         compute_mju = __mju_d__
         compute_eta = __eta_d__
         compute_x = __x_d__
-    print(f"Двойственная процедура построения непрерывного {optimality_criterion}- оптимального плана\n")
+    print(f"Л5: Двойственная процедура построения непрерывного {optimality_criterion}- оптимального плана.")
+    if use_gradient:
+        print("С импользованием градиента.\n")
+    else:
+        print("Без использования градиента.\n")
 
     epsilon_zero_plan = initial_plan if initial_plan is not None else __default_plan__(s, N)
     print(f"Начальный невырожденный план:\n{epsilon_zero_plan}\n")
@@ -163,6 +194,7 @@ def dual_procedure_optimal_plan(
         u_max_result = minimize(
             maximization_mju, u_value,
             method='SLSQP',
+            jac=gradient,
             bounds=np.array([u_bounds for i in range(N)]),
         )
         u_maximized = u_max_result.x
@@ -188,6 +220,8 @@ def dual_procedure_optimal_plan(
 
             k += 1
             current_plan = cleaned_plan
+        else:
+            print("Ищем новый локальный максимум...\n")
 
     print(f"\nИтоговый план:\n{current_plan}")
     return current_plan

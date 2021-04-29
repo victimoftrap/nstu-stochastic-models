@@ -31,6 +31,6 @@ if __name__ == '__main__':
 
     # plan = optimal_plan(N, s, F, psi, H, R, x0, U_bounds, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs)
     dual_procedure_optimal_plan(
-        'D', None,
+        'A', None, False,
         N, s, F, psi, H, R, x0, U_bounds, F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
     )
