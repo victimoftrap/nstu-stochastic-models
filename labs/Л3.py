@@ -1,9 +1,7 @@
 import numpy as np
 
-def pIMF(N, U):
-    # Нулевая матрица 2 на 2
-    zMatrix = np.array([[0, 0], [0, 0]])
-    
+
+def pIMF(N, U, s, F, psi, H, R, Xt0, pF, pPsi, pH, pR, pXt0):
     # Объявление массива векторов Xa
     Xa = []
     # Добавление нулевого элемента в массив Xa
@@ -37,23 +35,6 @@ def pIMF(N, U):
         else:
             C_t[2] = C[2].transpose()
     
-    # Шаг 1
-    # Инициализация заданных переменных
-    p1 = -1
-    p2 = 0.5
-    F = np.array([[-0.8, 1], [p1, 0]])
-    psi = np.array([[p2], [1]])
-    H = np.array([1, 0])
-    R = 0.1
-    Xt0 = np.array([[0], [0]])
-    
-    # Инициализация производных по переменным
-    pF = [np.array([[0, 0], [1, 0]]), np.array([[0, 0], [0, 0]])]
-    pPsi = [np.array([[0], [0]]), np.array([[1], [0]])]
-    pH = np.array([0, 0])
-    pR = 0
-    pXt0 = Xt0
-    
     # Матрица Fa
     Fa = np.zeros((3 * len(F), 3 * len(F)))
     for row in range(len(F)):
@@ -81,7 +62,7 @@ def pIMF(N, U):
     # Производная информационной матрицы Фишера до начала алгоритма
     dpM = []
     for i in range(N):
-        dpM.append(np.zeros((2, 2)))
+        dpM.append(np.zeros((s, s)))
     
     for k in range(N):
         Xa.append(k+1)
@@ -135,7 +116,7 @@ def pIMF(N, U):
                         + (pH @ C[0] @ (pr[k][b] @ Xa_t + Xa[k+1] @ pr_t) @ C_t[col] @ H_t * (R ** -1)) + \
                             + (H @ C[row] @ (pr[k][b] @ Xa_t + Xa[k+1] @ pr_t) @ C_t[0] @ pH_t * (R ** -1)) + \
                                 + (H @ C[row] @ (pr[k][b] @ Xa_t + Xa[k+1] @ pr_t) @ C_t[col] @ H_t * (R ** -1))
-            
+
     # for i in range(N):
     #     print(dpM[i])
     # Возврат первой матрицы (для проверки)

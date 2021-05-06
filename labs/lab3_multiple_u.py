@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def pIMF(N, u_all_t):
+def pIMF(N, u_all_t, s, F, psi, H, R, Xt0, pF, pPsi, pH, pR, pXt0):
     # Объявление массива векторов Xa
     Xa = []
 
@@ -30,24 +30,7 @@ def pIMF(N, u_all_t):
         else:
             C_t[2] = C[2].transpose()
 
-    # Шаг 1
-    # Инициализация заданных переменных
-    p1 = -1
-    p2 = 0.5
-    F = np.array([[-0.8, 1], [p1, 0]])
-    psi = np.array([[p2], [1]])
-    H = np.array([1, 0])
-    R = 0.1
-    Xt0 = np.array([[0], [0]])
-    # U = np.array([[[1]], [[1]], [[1]]])
     U = u_all_t
-
-    # Инициализация производных по переменным
-    pF = [np.array([[0, 0], [1, 0]]), np.array([[0, 0], [0, 0]])]
-    pPsi = [np.array([[0], [0]]), np.array([[1], [0]])]
-    pH = np.array([0, 0])
-    pR = 0
-    pXt0 = Xt0
 
     # Матрица Fa
     Fa = np.zeros((3 * len(F), 3 * len(F)))
@@ -70,7 +53,8 @@ def pIMF(N, u_all_t):
             psiA[cell * len(psi) + row, 0] = setting_value
 
     # Производная информационной матрицы Фишера до начала алгоритма
-    s = 2
+    # [u1(t0), u1(t1)]
+    # [u2(t0), u2(t1)]
     dpM = np.zeros((len(U[0]), N, s, s))
     for signal in range(len(dpM)):
         for time in range(len(dpM[0])):

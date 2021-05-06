@@ -105,7 +105,11 @@ def dual_procedure_optimal_plan(
         )
         f_2_degree = np.linalg.inv(fisher_plan) @ np.linalg.inv(fisher_plan)
 
-        derivs = pIMF(N, np.array(us))
+        derivs = pIMF(
+            N, np.array(us),
+            s, F, psi, H, R, x0,
+            F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
+        )
         u_gradient = []
         for der in derivs:
             u_gradient.append(np.trace(f_2_degree @ der))

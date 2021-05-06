@@ -14,13 +14,13 @@ delta = 0.01
 
 def __x_a_criteria__(fisher_by_plan):
     val = np.trace(np.linalg.inv(fisher_by_plan))
-    print(f"X[M(ksi)] A-optimal: {val}")
+    # print(f"X[M(ksi)] A-optimal: {val}")
     return val
 
 
 def __x_d_criteria__(fisher_by_plan):
     val = - np.log(np.linalg.det(fisher_by_plan))
-    print(f"X[M(ksi)] D-optimal: {val}")
+    # print(f"X[M(ksi)] D-optimal: {val}")
     return val
 
 
@@ -37,7 +37,11 @@ def optimal_plan(N, s, F, psi, H, R, x0, u_bounds, F_derivs, psi_derivs, H_deriv
 
         u_gradient = []
         for j in range(q):
-            derivs = pIMF(N, np.array([us[j] for i in range(N)]))
+            derivs = pIMF(
+                N, np.array([us[j] for i in range(N)]),
+                s, F, psi, H, R, x0,
+                F_derivs, psi_derivs, H_derivs, R_derivs, x0_derivs
+            )
             u_optima = []
             for der in derivs:
                 u_optima.append(- current_plan[j].p * np.trace(f_2_degree @ der))
